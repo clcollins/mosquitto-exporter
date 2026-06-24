@@ -276,10 +276,10 @@ func processGaugeMetric(topic, payload string) {
 
 func parseTopic(topic string) string {
 	name := strings.Replace(topic, "$SYS/", "", 1)
-	name = strings.Replace(name, "/", "_", -1)
-	name = strings.Replace(name, " ", "_", -1)
-	name = strings.Replace(name, "-", "_", -1)
-	name = strings.Replace(name, ".", "_", -1)
+	name = strings.ReplaceAll(name, "/", "_")
+	name = strings.ReplaceAll(name, " ", "_")
+	name = strings.ReplaceAll(name, "-", "_")
+	name = strings.ReplaceAll(name, ".", "_")
 	return name
 }
 
