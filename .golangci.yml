@@ -10,12 +10,11 @@ linters:
     - gocritic
     - misspell
     - gosec
-
-settings:
-  misspell:
-    ignore-words:
-      - mosquitto
-  gosec:
-    excludes:
-      - G402
-      - G114
+  settings:
+    misspell:
+      ignore-words:
+        - mosquitto
+    gosec:
+      excludes:
+        - G402
+        - G114
