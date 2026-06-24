@@ -1,0 +1,38 @@
+FROM registry.fedoraproject.org/fedora-minimal:42
+
+RUN microdnf install -y \
+      make \
+      git \
+      tar \
+      gzip \
+      curl \
+      ShellCheck \
+      golang \
+      nodejs-npm \
+      python3-pip \
+    && microdnf clean all \
+    && rm -rf /var/cache/dnf
+
+RUN pip install yamllint==1.37.0
+
+RUN npm install -g markdownlint-cli2@0.17.2 \
+    && npm cache clean --force
+
+RUN ARCH=$(uname -m) && \
+    case "${ARCH}" in \
+      x86_64) ARCH=amd64 ;; \
+      aarch64|arm64) ARCH=arm64 ;; \
+    esac && \
+    curl -fsSL "https://github.com/mrtazz/checkmake/releases/download/v0.3.2/checkmake-v0.3.2.linux.${ARCH}" \
+      -o /usr/local/bin/checkmake && \
+    chmod +x /usr/local/bin/checkmake
+
+RUN ARCH=$(uname -m) && \
+    case "${ARCH}" in \
+      x86_64) ARCH=amd64 ;; \
+      aarch64|arm64) ARCH=arm64 ;; \
+    esac && \
+    curl -fsSL "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-linux-${ARCH}.tar.gz" \
+      | tar -xz --strip-components=1 -C /usr/local/bin "golangci-lint-2.12.2-linux-${ARCH}/golangci-lint"
+
+WORKDIR /work

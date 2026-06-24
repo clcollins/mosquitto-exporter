@@ -118,7 +118,9 @@ func main() {
 		},
 	}
 
-	cmd.Run(context.Background(), os.Args)
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func resetMetrics() {
@@ -222,13 +224,13 @@ func runServer(ctx context.Context, cmd *cli.Command) error {
 
 // $SYS/broker/bytes/received
 func processUpdate(topic, payload string) {
-	//log.Printf("Got broker update with topic %s and data %s", topic, payload)
+	// log.Printf("Got broker update with topic %s and data %s", topic, payload)
 	if _, ok := ignoreKeyMetrics[topic]; !ok {
 		if _, ok := counterKeyMetrics[topic]; ok {
 			// log.Printf("Processing counter metric %s with data %s", topic, payload)
 			processCounterMetric(topic, payload)
 		} else {
-			//log.Printf("Processing gauge metric %s with data %s", topic, payload)
+			// log.Printf("Processing gauge metric %s and data %s", topic, payload)
 			processGaugeMetric(topic, payload)
 		}
 	}
@@ -276,10 +278,10 @@ func processGaugeMetric(topic, payload string) {
 
 func parseTopic(topic string) string {
 	name := strings.Replace(topic, "$SYS/", "", 1)
-	name = strings.Replace(name, "/", "_", -1)
-	name = strings.Replace(name, " ", "_", -1)
-	name = strings.Replace(name, "-", "_", -1)
-	name = strings.Replace(name, ".", "_", -1)
+	name = strings.ReplaceAll(name, "/", "_")
+	name = strings.ReplaceAll(name, " ", "_")
+	name = strings.ReplaceAll(name, "-", "_")
+	name = strings.ReplaceAll(name, ".", "_")
 	return name
 }
 

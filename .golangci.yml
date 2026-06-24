@@ -1,0 +1,20 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gocritic
+    - misspell
+    - gosec
+  settings:
+    misspell:
+      ignore-rules:
+        - mosquitto
+    gosec:
+      excludes:
+        - G402
+        - G114

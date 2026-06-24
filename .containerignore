@@ -1,0 +1,17 @@
+.env
+.git/
+.github/
+.gitignore
+.containerignore
+.yamllint.yaml
+.markdownlint.yaml
+CLAUDE.md
+CONVENTIONS.md
+Containerfile
+LICENSE
+Makefile
+README.md
+docs/
+out/
+test/
+.golangci.yml

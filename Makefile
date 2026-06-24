@@ -1,30 +1,130 @@
-PKG_NAME:=github.com/sapcc/mosquitto-exporter
-BUILD_DIR:=bin
-MOSQUITTO_EXPORTER_BINARY:=$(BUILD_DIR)/mosquitto_exporter
-IMAGE := sapcc/mosquitto-exporter
-VERSION=0.8.0
-LDFLAGS=-s -w -X main.Version=$(VERSION) -X main.GITCOMMIT=`git rev-parse --short HEAD`
-.PHONY: help
-help:
-	@echo
-	@echo "Available targets:"
-	@echo "  * build             - build the binary, output to $(ARC_BINARY)"
-	@echo "  * linux             - build the binary, output to $(ARC_BINARY)"
-	@echo "  * docker            - build docker image"
+-include .env
+
+CONTAINER_SUBSYS ?= podman
+NAME := mosquitto-exporter
+PROJECT := clcollins
+IMAGE_REGISTRY := quay.io
+
+CONTAINER_FILE := Containerfile
+IMAGE_STRING := $(IMAGE_REGISTRY)/$(PROJECT)/$(NAME)
+CI_IMAGE := $(NAME)-ci
+
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+VERSION ?= dev
+
+GO := go
+GOFLAGS ?=
+GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null)
+
+.PHONY: all
+all: fmt vet lint go-test build
+
+.PHONY: fmt
+fmt:
+	$(GO) fmt ./...
+
+.PHONY: vet
+vet:
+	$(GO) vet ./...
+
+.PHONY: lint
+lint:
+ifdef GOLANGCI_LINT
+	$(GOLANGCI_LINT) run ./...
+else
+	@echo "golangci-lint is required but not installed"
+	@exit 1
+endif
+
+.PHONY: go-test
+go-test:
+	$(GO) test -v -count=1 -race ./...
+
+.PHONY: go-test-cover
+go-test-cover:
+	$(GO) test -cover -count=1 ./...
 
 .PHONY: build
-build: export CGO_ENABLED=0
 build:
-	@mkdir -p $(BUILD_DIR)
-	go build -o $(MOSQUITTO_EXPORTER_BINARY) -ldflags="$(LDFLAGS)" $(PKG_NAME)
+	mkdir -p out
+	$(GO) build $(GOFLAGS) -o out/$(NAME) .
 
-linux: export GOOS=linux
-linux: build
+.PHONY: tidy
+tidy:
+	$(GO) mod tidy
 
-docker:
-	docker build -t $(IMAGE):$(VERSION) .
-	docker build -t $(IMAGE):latest .
+.PHONY: tidy-check
+tidy-check:
+	$(GO) mod tidy
+	@test -z "$$(git diff --name-only go.mod go.sum)" || \
+		{ echo "go.mod or go.sum is not tidy."; git diff go.mod go.sum; exit 1; }
 
-push:
-	docker push $(IMAGE):$(VERSION)
-	docker push $(IMAGE):latest
+# --- Container targets ---
+
+.PHONY: image-build
+image-build:
+	$(CONTAINER_SUBSYS) build -f $(CONTAINER_FILE) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		--build-arg VCS_REF=$(GIT_COMMIT) \
+		--build-arg VERSION=$(VERSION) \
+		-t $(IMAGE_STRING):$(GIT_SHA) -t $(IMAGE_STRING):latest .
+
+.PHONY: image-push
+image-push: image-build
+	$(CONTAINER_SUBSYS) push $(IMAGE_STRING):$(GIT_SHA)
+	$(CONTAINER_SUBSYS) push $(IMAGE_STRING):latest
+
+# --- CI container targets ---
+
+.PHONY: ci-build
+ci-build:
+	$(CONTAINER_SUBSYS) build -f test/Containerfile.ci -t $(CI_IMAGE) test/
+
+.PHONY: ci-all
+ci-all: ci-build
+	$(CONTAINER_SUBSYS) run --rm -v "$$(pwd):/work:Z" $(CI_IMAGE) make ci-checks
+
+.PHONY: ci-checks
+ci-checks: yaml-lint markdown-lint makefile-lint containerfile-check shellcheck-lint docs-check
+
+# --- CI check targets (run inside CI container) ---
+
+.PHONY: yaml-lint
+yaml-lint:
+	yamllint -c .yamllint.yaml .
+
+.PHONY: markdown-lint
+markdown-lint:
+	markdownlint-cli2 '**/*.md' '#node_modules'
+
+.PHONY: makefile-lint
+makefile-lint:
+	checkmake Makefile
+
+.PHONY: containerfile-check
+containerfile-check:
+	ENFORCE=1 bash test/scripts/check-containerfile-tags.sh Containerfile
+	ENFORCE=1 bash test/scripts/check-containerfile-tags.sh test/Containerfile.ci
+
+.PHONY: shellcheck-lint
+shellcheck-lint:
+	shellcheck test/scripts/*.sh
+
+.PHONY: docs-check
+docs-check:
+	@if [ -z "$$(find docs/plans -name '*.md' -type f 2>/dev/null)" ]; then \
+		echo "ERROR: No plan documents found in docs/plans/"; \
+		exit 1; \
+	fi
+	@echo "Plan documents found in docs/plans/."
+
+# --- Aggregate targets ---
+
+.PHONY: test
+test: ci-all
+
+.PHONY: clean
+clean:
+	rm -rf out/
