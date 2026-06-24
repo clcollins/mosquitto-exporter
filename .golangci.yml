@@ -12,7 +12,7 @@ linters:
     - gosec
   settings:
     misspell:
-      ignore-words:
+      ignore-rules:
         - mosquitto
     gosec:
       excludes:
